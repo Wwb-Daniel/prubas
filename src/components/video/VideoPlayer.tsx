@@ -31,12 +31,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
   const { followUser, unfollowUser, isFollowing: checkIsFollowing } = useUserStore();
   const navigate = useNavigate();
 
-  // Reset view recording state when video changes
   useEffect(() => {
     setHasRecordedView(false);
   }, [video.id]);
 
-  // Check if current user is the video owner
   useEffect(() => {
     const checkOwnership = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -45,7 +43,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     checkOwnership();
   }, [video.user_id]);
 
-  // Check if user is following the video creator
   useEffect(() => {
     const checkFollowStatus = async () => {
       if (video.user_id) {
@@ -56,7 +53,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     checkFollowStatus();
   }, [video.user_id, checkIsFollowing]);
 
-  // Check if video is liked by current user
   useEffect(() => {
     const checkLikeStatus = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -75,7 +71,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     checkLikeStatus();
   }, [video.id]);
 
-  // Check if video is saved by current user
   useEffect(() => {
     const checkSaveStatus = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -131,7 +126,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Registrar la vista en video_views
       const { error: viewError } = await supabase
         .from('video_views')
         .insert({
@@ -140,14 +134,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
         });
 
       if (viewError) {
-        // Si es un error de duplicado, lo ignoramos (el usuario ya vio el video)
         if (viewError.code === '23505') return;
         console.error('Error recording view:', viewError);
         return;
       }
-
-      // El trigger actualizará automáticamente el contador de vistas
-      // No necesitamos actualizar manualmente el contador
     } catch (error) {
       console.error('Error recording view:', error);
     }
@@ -186,7 +176,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
       if (!user) throw new Error('Not authenticated');
 
       if (!isLiked) {
-        // Add like
         const { error } = await supabase
           .from('likes')
           .insert({
@@ -197,7 +186,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
           });
 
         if (error) {
-          // If it's a unique constraint violation, the like already exists
           if (error.code === '23505') {
             console.log('Like already exists');
             return;
@@ -205,12 +193,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
           throw error;
         }
 
-        // Actualizar el estado local inmediatamente
         setIsLiked(true);
-        // Incrementar el contador localmente
         video.likes_count = (video.likes_count || 0) + 1;
 
-        // Actualizar el contador en la base de datos
         const { error: updateError } = await supabase
           .from('videos')
           .update({ 
@@ -313,100 +298,113 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
   };
 
   return (
-    <div className="relative w-full h-full bg-black">
-      <video
-        ref={videoRef}
-        src={video.video_url}
-        className="absolute inset-0 w-full h-full object-contain z-10"
-        loop
-        playsInline
-        muted={isMuted}
-        onClick={togglePlay}
-      />
+    <div className="relative w-full h-full bg-black/90 backdrop-blur-lg">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 flex items-center justify-center"
+      >
+        <video
+          ref={videoRef}
+          src={video.video_url}
+          className="w-full h-full object-contain rounded-lg shadow-2xl"
+          loop
+          playsInline
+          muted={isMuted}
+          onClick={togglePlay}
+        />
+      </motion.div>
       
       <motion.button
-        whileTap={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
         className="absolute top-4 left-4 z-30"
         onClick={(e) => {
           e.stopPropagation();
           toggleMute();
         }}
       >
-        <div className="w-10 h-10 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center transition-transform hover:scale-110">
           {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
         </div>
       </motion.button>
 
       <div 
-        className="absolute inset-0 z-20 flex items-center justify-center cursor-pointer"
+        className="absolute inset-0 z-20 flex items-center justify-center cursor-pointer backdrop-blur-sm bg-black/20"
         onClick={togglePlay}
       >
-        {showPlayButton && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            className="bg-black bg-opacity-50 rounded-full p-4"
-          >
-            {isPlaying ? (
-              <Pause className="w-12 h-12 text-white" />
-            ) : (
-              <Play className="w-12 h-12 text-white" />
-            )}
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {showPlayButton && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              className="rounded-full p-4 bg-black/50 backdrop-blur-md shadow-glow"
+            >
+              {isPlaying ? (
+                <Pause className="w-12 h-12 text-white" />
+              ) : (
+                <Play className="w-12 h-12 text-white" />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* VIP badge for creator */}
       {video.user_profile?.is_vip && (
-        <div className="absolute top-4 right-4 z-30 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full px-3 py-1 flex items-center space-x-1">
-          <Crown size={16} className="text-yellow-300" />
-          <span className="text-xs font-medium">VIP Creator</span>
+        <div className="absolute top-4 right-4 z-30">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-brand rounded-full px-3 py-1 flex items-center space-x-1 shadow-glow"
+          >
+            <Crown size={16} className="text-yellow-300" />
+            <span className="text-xs font-medium">VIP Creator</span>
+          </motion.div>
         </div>
       )}
 
-      {/* Interaction buttons - centered on the right */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center space-y-4">
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center space-y-6">
         <motion.button
-          whileTap={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
           className="flex flex-col items-center"
           onClick={handleLike}
         >
-          <div className={`w-12 h-12 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-white'}`}>
+          <div className={`w-12 h-12 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center transition-transform hover:scale-110 ${isLiked ? 'text-red-500' : 'text-white'}`}>
             <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
           </div>
-          <span className="text-xs mt-1">{formatCount(video.likes_count)}</span>
+          <span className="text-xs mt-1 font-medium">{formatCount(video.likes_count)}</span>
         </motion.button>
         
         <motion.button
-          whileTap={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
           className="flex flex-col items-center"
           onClick={toggleComments}
         >
-          <div className="w-12 h-12 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center transition-transform hover:scale-110">
             <MessageCircle size={24} />
           </div>
-          <span className="text-xs mt-1">{formatCount(video.comments_count)}</span>
+          <span className="text-xs mt-1 font-medium">{formatCount(video.comments_count)}</span>
         </motion.button>
 
         <motion.button
-          whileTap={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
           className="flex flex-col items-center"
           onClick={handleSave}
         >
-          <div className={`w-12 h-12 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center ${isSaved ? 'text-blue-500' : 'text-white'}`}>
+          <div className={`w-12 h-12 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center transition-transform hover:scale-110 ${isSaved ? 'text-blue-500' : 'text-white'}`}>
             <Bookmark size={24} fill={isSaved ? "currentColor" : "none"} />
           </div>
-          <span className="text-xs mt-1">Save</span>
+          <span className="text-xs mt-1 font-medium">Save</span>
         </motion.button>
         
         <div className="relative">
           <motion.button
-            whileTap={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
             className="flex flex-col items-center"
             onClick={handleOptionsClick}
           >
-            <div className="w-12 h-12 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center transition-transform hover:scale-110">
               <MoreVertical size={24} />
             </div>
           </motion.button>
@@ -414,10 +412,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
           <AnimatePresence>
             {showOptions && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                className="absolute bottom-full right-0 mb-2 w-48 bg-gray-800 rounded-lg shadow-lg overflow-hidden"
+                initial={{ opacity: 0, scale: 0.95, x: -10 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.95, x: -10 }}
+                className="absolute right-full mr-2 w-48 bg-black/90 backdrop-blur-md rounded-lg shadow-xl overflow-hidden border border-gray-800"
               >
                 {isCurrentUserVideo && (
                   <>
@@ -426,7 +424,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
                         e.stopPropagation();
                         handleEdit();
                       }}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-700 flex items-center"
+                      className="w-full px-4 py-2 text-left hover:bg-white/10 transition-colors flex items-center"
                     >
                       <Pencil size={18} className="mr-2" />
                       Edit
@@ -437,7 +435,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
                         setShowOptions(false);
                         handleDelete();
                       }}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-700 flex items-center text-red-500"
+                      className="w-full px-4 py-2 text-left hover:bg-white/10 transition-colors flex items-center text-red-500"
                     >
                       <Trash2 size={18} className="mr-2" />
                       Delete
@@ -449,14 +447,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
                     e.stopPropagation();
                     handleShare();
                   }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-700 flex items-center"
+                  className="w-full px-4 py-2 text-left hover:bg-white/10 transition-colors flex items-center"
                 >
                   <Share2 size={18} className="mr-2" />
                   Share
                 </button>
                 <button
                   onClick={handleDownload}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-700 flex items-center"
+                  className="w-full px-4 py-2 text-left hover:bg-white/10 transition-colors flex items-center"
                 >
                   <Download size={18} className="mr-2" />
                   Download
@@ -467,26 +465,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
         </div>
       </div>
       
-      {/* Video info section */}
-      <div className="absolute bottom-8 left-0 right-16 z-30 px-4">
-        <div className="max-w-3xl">
+      <div className="absolute bottom-8 left-0 right-16 z-30 px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-3xl backdrop-blur-md bg-black/50 rounded-xl p-4 border border-gray-800/50"
+        >
           <div className="flex items-center space-x-3 mb-3">
             <Link 
               to={`/profile/${video.user_id}`}
               onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0"
+              className="flex-shrink-0 group"
             >
               {video.user_profile?.avatar_url ? (
-                <img 
+                <motion.img 
+                  whileHover={{ scale: 1.1 }}
                   src={video.user_profile.avatar_url} 
                   alt={video.user_profile.username}
-                  className="w-10 h-10 rounded-full object-cover"
+                  className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10 group-hover:ring-brand-blue transition-all"
                   loading="lazy"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+                <motion.div 
+                  whileHover={{ scale: 1.1 }}
+                  className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-white/10 group-hover:ring-brand-blue transition-all"
+                >
                   <User size={20} />
-                </div>
+                </motion.div>
               )}
             </Link>
             
@@ -495,7 +500,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
                 <Link 
                   to={`/profile/${video.user_id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="hover:underline"
+                  className="hover:text-brand-blue transition-colors"
                 >
                   <span className="text-base font-medium">@{video.user_profile?.username}</span>
                 </Link>
@@ -504,11 +509,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={handleFollow}
-                    className="ml-2 px-3 py-1 rounded-full bg-gray-800 bg-opacity-70 flex items-center space-x-1"
+                    className="ml-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md flex items-center space-x-1 hover:bg-white/20 transition-colors"
                   >
                     {isFollowing ? (
                       <>
-                        <Check size={16} className="text-blue-500" />
+                        <Check size={16} className="text-brand-blue" />
                         <span className="text-sm">Following</span>
                       </>
                     ) : (
@@ -523,17 +528,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
             </div>
           </div>
           
-          <h3 className="text-sm font-medium mb-1">{video.title}</h3>
+          <h3 className="text-lg font-medium mb-1">{video.title}</h3>
           
           {video.description && (
-            <p className="text-xs text-gray-300 line-clamp-2">{video.description}</p>
+            <p className="text-sm text-gray-300 line-clamp-2">{video.description}</p>
           )}
           
-          <div className="flex items-center mt-2 text-gray-400 text-xs">
-            <Eye size={12} className="mr-1" />
+          <div className="flex items-center mt-2 text-gray-400 text-sm">
+            <Eye size={16} className="mr-1" />
             <span>{formatCount(video.views_count)} views</span>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       <AnimatePresence>
@@ -543,14 +548,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25 }}
-            className="fixed bottom-0 left-0 right-0 h-[70vh] md:h-[70vh] md:w-[400px] md:right-0 md:left-auto md:top-auto bg-black bg-opacity-95 z-40 rounded-t-2xl md:rounded-tl-2xl md:rounded-tr-none"
+            className="fixed bottom-0 left-0 right-0 h-[70vh] md:h-[70vh] md:w-[400px] md:right-0 md:left-auto md:top-auto bg-black/95 backdrop-blur-md z-40 rounded-t-2xl md:rounded-tl-2xl md:rounded-tr-none border-t border-l border-gray-800/50"
             onClick={(e) => e.stopPropagation()}
           >
             <CommentSection
               videoId={video.id}
               onClose={() => setShowComments(false)}
               onCommentAdded={() => {
-                // Actualizar el contador localmente
                 video.comments_count = (video.comments_count || 0) + 1;
               }}
             />
