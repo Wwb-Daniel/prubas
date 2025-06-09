@@ -1,20 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { useViewsStore } from '../store/viewsStore';
 
-// Debug environment variables
-console.log('Environment variables:', {
-  url: import.meta.env.VITE_SUPABASE_URL,
-  key: import.meta.env.VITE_SUPABASE_ANON_KEY,
-  bucket: import.meta.env.VITE_SUPABASE_AUDIO_BUCKET
-});
-
 // Validate environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabaseAudioBucket = import.meta.env.VITE_SUPABASE_AUDIO_BUCKET || 'audio_tracks';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing required Supabase environment variables (URL and Anon Key). Please check your .env file.');
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
 }
 
 // Create Supabase client with explicit options
@@ -25,9 +17,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true
   }
 });
-
-// Export the audio bucket name for use in other files
-export const AUDIO_BUCKET = supabaseAudioBucket;
 
 export type UserProfile = {
   id: string;
@@ -48,18 +37,6 @@ export type UserSettings = {
   updated_at: string;
 }
 
-export type AudioTrack = {
-  id: string;
-  user_id: string;
-  title: string;
-  audio_url: string;
-  genre: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-  user_profile?: UserProfile;
-}
-
 export type Video = {
   id: string;
   title: string;
@@ -73,8 +50,6 @@ export type Video = {
   views_count: number;
   is_edited: boolean;
   user_profile?: UserProfile;
-  audio_track_id?: string;
-  audio_track?: AudioTrack;
 }
 
 export type Comment = {

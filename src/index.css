@@ -2,38 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply text-white bg-black antialiased;
-  }
+/* Hide scrollbar for webkit browsers */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-@layer components {
-  .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  
-  .btn-primary {
-    @apply bg-gradient-brand text-white hover:opacity-90 active:opacity-100;
-  }
-  
-  .btn-outline {
-    @apply border border-gray-700 hover:bg-gray-800;
-  }
-  
-  .input {
-    @apply w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg 
-           focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent
-           placeholder-gray-400;
-  }
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-.bg-gradient-brand {
-  background: linear-gradient(45deg, #FF3366, #FF33CC, #9933FF, #3366FF);
+/* TikTok-style animations */
+@keyframes pulse-heart {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
-.text-gradient-brand {
-  background: linear-gradient(45deg, #FF3366, #FF33CC, #9933FF, #3366FF);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.pulse-heart {
+  animation: pulse-heart 0.3s ease-in-out;
+}
+
+/* Smooth transitions for video controls */
+.video-control {
+  transition: all 0.2s ease-in-out;
+}
+
+.video-control:hover {
+  transform: scale(1.05);
+}
+
+/* Line clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

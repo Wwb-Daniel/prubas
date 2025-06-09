@@ -1,11 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useVideoStore } from '../../store/videoStore';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, PlayCircle, Music } from 'lucide-react';
+import { Upload, X, PlayCircle } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import AudioTrackSelector from '../audio/AudioTrackSelector';
-import { AudioTrack } from '../../lib/supabase';
 
 const UploadForm: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -13,7 +11,6 @@ const UploadForm: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { uploadVideo, loading, error } = useVideoStore();
@@ -65,18 +62,12 @@ const UploadForm: React.FC = () => {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) return;
-
-    try {
-      await uploadVideo({
-        file: selectedFile,
-        title,
-        description,
-        audioTrackId: selectedAudioTrack?.id
-      });
+    
+    if (!selectedFile || !title.trim()) return;
+    
+    await uploadVideo(selectedFile, title, description);
+    if (!error) {
       navigate('/');
-    } catch (error) {
-      console.error('Error uploading video:', error);
     }
   };
   
@@ -85,84 +76,76 @@ const UploadForm: React.FC = () => {
       <h1 className="text-2xl font-bold mb-6">Upload a video</h1>
       
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            dragActive ? 'border-blue-500 bg-blue-500 bg-opacity-10' : 'border-gray-700'
-          }`}
-          onDragEnter={handleDrag}
-          onDragOver={handleDrag}
-          onDragLeave={handleDrag}
-          onDrop={handleDrop}
-        >
-          {!selectedFile ? (
-            <div className="space-y-4">
-              <Upload className="mx-auto h-12 w-12 text-gray-400" />
-              <div className="text-sm text-gray-400">
-                <label
-                  htmlFor="video-upload"
-                  className="relative cursor-pointer rounded-md font-medium text-blue-500 hover:text-blue-400"
-                >
-                  <span>Upload a video</span>
-                  <input
-                    id="video-upload"
-                    name="video-upload"
-                    type="file"
-                    className="sr-only"
-                    accept="video/*"
-                    onChange={handleFileChange}
-                    ref={fileInputRef}
-                  />
-                </label>
-                <p className="pl-1">or drag and drop</p>
-              </div>
-              <p className="text-xs text-gray-500">MP4 or WebM up to 100MB</p>
+        {!selectedFile ? (
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center ${
+              dragActive ? 'border-blue-500 bg-blue-50 bg-opacity-10' : 'border-gray-700'
+            }`}
+            onDragEnter={handleDrag}
+            onDragOver={handleDrag}
+            onDragLeave={handleDrag}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="video/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <p className="text-lg mb-1">Drag and drop your video here</p>
+            <p className="text-sm text-gray-500 mb-4">
+              Or click to select a file
+            </p>
+            <Button type="button" variant="outline" size="sm">
+              Select Video
+            </Button>
+          </div>
+        ) : (
+          <div className="relative bg-gray-900 rounded-lg overflow-hidden">
+            <video
+              src={videoPreview || undefined}
+              className="w-full h-64 object-contain"
+              controls
+            />
+            <button
+              type="button"
+              onClick={clearSelectedFile}
+              className="absolute top-2 right-2 bg-black bg-opacity-70 rounded-full p-1 text-white"
+            >
+              <X size={20} />
+            </button>
+            <div className="p-3 bg-gray-800">
+              <p className="text-sm truncate">{selectedFile.name}</p>
+              <p className="text-xs text-gray-400">
+                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+              </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="relative aspect-[9/16] max-w-xs mx-auto">
-                <video
-                  src={videoPreview || ''}
-                  className="w-full h-full object-cover rounded-lg"
-                  controls
-                />
-                <button
-                  type="button"
-                  className="absolute top-2 right-2 p-1 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-75"
-                  onClick={clearSelectedFile}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
         
-        <div className="space-y-4">
-          <Input
-            label="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Enter video title"
-            required
-          />
-          
-          <Input
-            label="Description"
+        <Input
+          label="Title"
+          placeholder="Add a title for your video"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          fullWidth
+          required
+        />
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
+          <textarea
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            placeholder="Describe your video (optional)"
+            rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Enter video description"
-            
           />
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Audio Track
-            </label>
-            <AudioTrackSelector
-              onSelect={setSelectedAudioTrack}
-              selectedAudioTrack={selectedAudioTrack}
-            />
-          </div>
         </div>
         
         {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -179,10 +162,10 @@ const UploadForm: React.FC = () => {
           <Button
             type="submit"
             isLoading={loading}
-            disabled={!selectedFile || loading}
+            disabled={!selectedFile || !title.trim()}
             className="flex-1"
           >
-            {loading ? 'Uploading...' : 'Upload Video'}
+            Upload Video
           </Button>
         </div>
       </form>

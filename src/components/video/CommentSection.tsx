@@ -3,6 +3,7 @@ import { X, User, Send, Gift, Crown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Comment } from '../../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import TokenPurchaseModal from '../chat/TokenPurchaseModal';
 
 interface CommentSectionProps {
@@ -228,23 +229,33 @@ const CommentSection: React.FC<CommentSectionProps> = ({ videoId, onClose, onCom
               exit={{ opacity: 0, y: -20 }}
               className="flex space-x-3"
             >
-              <div className="flex-shrink-0">
+              <Link 
+                to={`/profile/${comment.user_id}`}
+                className="flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {comment.user_profile?.avatar_url ? (
                   <img
                     src={comment.user_profile.avatar_url}
                     alt={comment.user_profile.username}
-                    className="w-10 h-10 rounded-full object-cover"
+                    className="w-10 h-10 rounded-full object-cover hover:ring-2 hover:ring-blue-500 transition-all"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all">
                     <User size={20} />
                   </div>
                 )}
-              </div>
+              </Link>
               
               <div className="flex-1">
                 <div className="flex items-center space-x-2">
-                  <span className="font-medium">@{comment.user_profile?.username}</span>
+                  <Link 
+                    to={`/profile/${comment.user_id}`}
+                    className="font-medium hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    @{comment.user_profile?.username}
+                  </Link>
                   {comment.user_profile?.is_vip && (
                     <span className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-full px-2 py-0.5 text-xs flex items-center">
                       <Crown size={12} className="text-yellow-300 mr-1" />

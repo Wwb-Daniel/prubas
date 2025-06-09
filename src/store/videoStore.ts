@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { Video, AudioTrack } from '../lib/supabase';
+import type { Video } from '../lib/supabase';
 
 interface VideoState {
   videos: Video[];
@@ -8,22 +8,22 @@ interface VideoState {
   loading: boolean;
   error: string | null;
   hasMore: boolean;
-  feedType: 'all' | 'following' | 'foryou' | 'explore' | 'trending';
+  feedType: 'all' | 'following' | 'foryou' | 'explore';
   fetchVideos: (page?: number) => Promise<void>;
-  uploadVideo: (data: {
-    file: File;
-    title: string;
-    description?: string;
-    audioTrackId?: string;
+  uploadVideo: (file: File, title: string, description: string, options?: {
+    musicTrack?: string;
+    effects?: any[];
+    challengeId?: string;
+    hashtags?: string[];
+    mentions?: string[];
   }) => Promise<void>;
   updateVideo: (videoId: string, title: string, description: string) => Promise<void>;
   deleteVideo: (videoId: string) => Promise<void>;
   likeVideo: (videoId: string) => Promise<void>;
-  unlikeVideo: (videoId: string) => Promise<void>;
   saveVideo: (videoId: string) => Promise<void>;
-  unsaveVideo: (videoId: string) => Promise<void>;
   setCurrentVideo: (video: Video | null) => void;
-  setFeedType: (type: 'all' | 'following' | 'foryou' | 'explore' | 'trending') => void;
+  setFeedType: (type: 'all' | 'following' | 'foryou' | 'explore') => void;
+  marcarVideoVisto: (videoId: string) => Promise<void>;
 }
 
 const PAGE_SIZE = 5;
@@ -38,11 +38,31 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   loading: false,
   error: null,
   hasMore: true,
-  feedType: 'trending',
+  feedType: 'all',
 
   setFeedType: (type) => {
-    set({ feedType: type });
+    set({ feedType: type, videos: [], hasMore: true });
     get().fetchVideos(0);
+  },
+
+  marcarVideoVisto: async (videoId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('videos_vistos')
+        .insert({
+          user_id: user.id,
+          video_id: videoId
+        });
+
+      if (error && error.code !== '23505') { // Ignorar error de duplicado
+        console.error('Error marcando video como visto:', error);
+      }
+    } catch (error) {
+      console.error('Error marcando video como visto:', error);
+    }
   },
 
   fetchVideos: async (page = 0) => {
@@ -76,37 +96,11 @@ export const useVideoStore = create<VideoState>((set, get) => ({
             id,
             name,
             description
-          ),
-          audio_track:audio_tracks(*)
+          )
         `);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
-      // Get user's viewed videos
-      const { data: viewedVideos } = await supabase
-        .from('video_views')
-        .select('video_id')
-        .eq('user_id', user.id);
-
-      const viewedIds = viewedVideos?.map(v => v.video_id) || [];
-
-      // Get user's liked videos
-      const { data: likedVideos } = await supabase
-        .from('likes')
-        .select('content_id')
-        .eq('user_id', user.id)
-        .eq('content_type', 'video');
-
-      const likedIds = likedVideos?.map(v => v.content_id) || [];
-
-      // Get user's saved videos
-      const { data: savedVideos } = await supabase
-        .from('video_saves')
-        .select('video_id')
-        .eq('user_id', user.id);
-
-      const savedIds = savedVideos?.map(v => v.video_id) || [];
 
       switch (feedType) {
         case 'following':
@@ -124,32 +118,40 @@ export const useVideoStore = create<VideoState>((set, get) => ({
           break;
 
         case 'foryou':
-          // Primero obtenemos los videos no vistos
-          const { data: unseenVideos, error: unseenError } = await supabase
+          // Obtener videos que el usuario ya ha visto
+          const { data: videosVistos } = await supabase
+            .from('videos_vistos')
+            .select('video_id')
+            .eq('user_id', user.id);
+
+          const videosVistosIds = videosVistos?.map(v => v.video_id) || [];
+
+          if (videosVistosIds.length > 0) {
+            // Excluir videos ya vistos
+            query = query.not('id', 'in', videosVistosIds);
+          }
+
+          // Verificar si hay videos no vistos
+          const { data: videosNoVistos, error: checkError } = await supabase
             .from('videos')
             .select('id')
-            .not('id', 'in', viewedIds)
-            .order('likes_count', { ascending: false })
-            .order('comments_count', { ascending: false })
-            .order('views_count', { ascending: false })
-            .order('created_at', { ascending: false })
+            .not('id', 'in', videosVistosIds)
             .limit(1);
 
-          if (unseenError) throw unseenError;
+          if (checkError) throw checkError;
 
-          if (!unseenVideos || unseenVideos.length === 0) {
+          if (!videosNoVistos || videosNoVistos.length === 0) {
             set({ 
               videos: [], 
               hasMore: false, 
               loading: false,
-              error: 'No hay más videos nuevos para ver. ¡Vuelve más tarde!'
+              error: '¡Has visto todos los videos disponibles! Vuelve más tarde para ver contenido nuevo.'
             });
             return;
           }
 
-          // Si hay videos no vistos, continuamos con la consulta principal
+          // Ordenar por engagement para mostrar los mejores videos primero
           query = query
-            .not('id', 'in', viewedIds)
             .order('likes_count', { ascending: false })
             .order('comments_count', { ascending: false })
             .order('views_count', { ascending: false })
@@ -228,7 +230,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     }
   },
 
-  uploadVideo: async ({ file, title, description, audioTrackId }) => {
+  uploadVideo: async (file, title, description, options = {}) => {
     set({ loading: true, error: null });
     
     try {
@@ -258,7 +260,9 @@ export const useVideoStore = create<VideoState>((set, get) => ({
           description,
           video_url: publicUrlData.publicUrl,
           user_id: user.id,
-          audio_track_id: audioTrackId
+          music_track: options.musicTrack,
+          effects: options.effects,
+          challenge_id: options.challengeId
         })
         .select()
         .single();
@@ -419,35 +423,6 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     }
   },
 
-  unlikeVideo: async (videoId) => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('content_id', videoId)
-        .eq('content_type', 'video');
-
-      if (error) throw error;
-
-      // Update video likes count
-      const { error: updateError } = await supabase.rpc('decrement_likes_count', {
-        video_id: videoId
-      });
-
-      if (updateError) throw updateError;
-
-      // Refresh videos list
-      await get().fetchVideos(0);
-    } catch (error: any) {
-      console.error('Error unliking video:', error);
-      set({ error: error.message });
-    }
-  },
-
   saveVideo: async (videoId) => {
     try {
       const user = (await supabase.auth.getUser()).data.user;
@@ -476,27 +451,6 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       }
     } catch (error) {
       console.error('Error saving video:', error);
-    }
-  },
-
-  unsaveVideo: async (videoId) => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase
-        .from('video_saves')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('video_id', videoId);
-
-      if (error) throw error;
-
-      // Refresh videos list
-      await get().fetchVideos(0);
-    } catch (error: any) {
-      console.error('Error unsaving video:', error);
-      set({ error: error.message });
     }
   },
 

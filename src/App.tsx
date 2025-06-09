@@ -16,7 +16,6 @@ import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import UploadPage from './pages/UploadPage';
 import SearchPage from './pages/SearchPage';
-import AudioTracksPage from './pages/AudioTracksPage';
 
 function App() {
   const { initialize, initialized } = useAuthStore();
@@ -53,7 +52,6 @@ function App() {
           <Route path="profile/:id" element={<ProfilePage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="search" element={<SearchPage />} />
-          <Route path="audio" element={<AudioTracksPage />} />
         </Route>
         
         {/* Catch-all route */}

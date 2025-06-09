@@ -4,13 +4,11 @@ import Navbar from './Navbar';
 
 const AppLayout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-black text-white flex">
+    <div className="min-h-screen bg-black text-white flex flex-col">
       <Navbar />
       
-      <main className="flex-1 ml-20">
-        <div className="max-w-7xl mx-auto">
-          <Outlet />
-        </div>
+      <main className="flex-1 overflow-hidden">
+        <Outlet />
       </main>
     </div>
   );
