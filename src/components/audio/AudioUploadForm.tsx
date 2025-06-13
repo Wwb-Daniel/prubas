@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase, AUDIO_BUCKET } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
-import { Upload, X, Music, Tag } from 'lucide-react';
+import { Upload, X, Music, Tag, Play, Pause } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
@@ -13,7 +13,11 @@ const AudioUploadForm: React.FC = () => {
   const [tags, setTags] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const { user } = useAuthStore();
 
   // Check if bucket exists on component mount
@@ -41,6 +45,36 @@ const AudioUploadForm: React.FC = () => {
     checkBucket();
   }, []);
 
+  // Audio event listeners
+  useEffect(() => {
+    if (audioRef.current && audioPreview) {
+      const audio = audioRef.current;
+      
+      const handleLoadedMetadata = () => {
+        setDuration(audio.duration);
+      };
+      
+      const handleTimeUpdate = () => {
+        setCurrentTime(audio.currentTime);
+      };
+      
+      const handleEnded = () => {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      };
+
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.addEventListener('timeupdate', handleTimeUpdate);
+      audio.addEventListener('ended', handleEnded);
+
+      return () => {
+        audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.removeEventListener('timeupdate', handleTimeUpdate);
+        audio.removeEventListener('ended', handleEnded);
+      };
+    }
+  }, [audioPreview]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -56,6 +90,12 @@ const AudioUploadForm: React.FC = () => {
       setError(null);
       const objectUrl = URL.createObjectURL(file);
       setAudioPreview(objectUrl);
+      
+      // Auto-fill title from filename
+      if (!title) {
+        const fileName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+        setTitle(fileName);
+      }
     }
   };
 
@@ -82,6 +122,12 @@ const AudioUploadForm: React.FC = () => {
       setError(null);
       const objectUrl = URL.createObjectURL(file);
       setAudioPreview(objectUrl);
+      
+      // Auto-fill title from filename
+      if (!title) {
+        const fileName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+        setTitle(fileName);
+      }
     }
   };
 
@@ -93,6 +139,20 @@ const AudioUploadForm: React.FC = () => {
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  };
+
+  const togglePlay = () => {
+    if (audioRef.current && audioPreview) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
     }
   };
 
@@ -136,14 +196,12 @@ const AudioUploadForm: React.FC = () => {
 
       if (dbError) throw dbError;
 
-      // Reset form
+      // Reset form and close modal
       clearSelectedFile();
       setTitle('');
       setGenre('');
       setTags('');
-      
-      // Show success message or redirect
-      alert('Audio track uploaded successfully!');
+      window.location.reload(); // Recargar la página para mostrar el nuevo audio
     } catch (error: any) {
       console.error('Error uploading audio:', error);
       setError(error.message || 'Failed to upload audio track. Please try again.');
@@ -151,6 +209,14 @@ const AudioUploadForm: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -186,18 +252,55 @@ const AudioUploadForm: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-center">
-              <Music className="h-12 w-12 text-blue-500" />
+            {/* Audio Preview Player */}
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="flex items-center space-x-4">
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors"
+                >
+                  {isPlaying ? (
+                    <Pause size={20} className="text-white" />
+                  ) : (
+                    <Play size={20} className="text-white ml-0.5" />
+                  )}
+                </button>
+                
+                <div className="flex-1">
+                  <div className="flex items-center justify-between text-sm text-gray-300 mb-2">
+                    <span>{selectedFile.name}</span>
+                    <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-blue-500 rounded-full h-2 transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  className="text-red-500 hover:text-red-400"
+                  onClick={clearSelectedFile}
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
+            
+            {/* Hidden audio element */}
+            <audio
+              ref={audioRef}
+              src={audioPreview || undefined}
+              preload="metadata"
+            />
+            
             <div className="text-sm text-gray-400">
-              <p>{selectedFile.name}</p>
-              <button
-                type="button"
-                className="text-red-500 hover:text-red-400 mt-2"
-                onClick={clearSelectedFile}
-              >
-                Remove
-              </button>
+              <p>Size: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
             </div>
           </div>
         )}
@@ -233,16 +336,21 @@ const AudioUploadForm: React.FC = () => {
               className="flex-1"
             />
           </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Separate multiple tags with commas (e.g., pop, upbeat, dance)
+          </p>
         </div>
       </div>
 
       {error && (
-        <div className="text-red-500 text-sm">{error}</div>
+        <div className="text-red-500 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+          {error}
+        </div>
       )}
 
       <Button
         type="submit"
-        disabled={!selectedFile || loading}
+        disabled={!selectedFile || loading || !title.trim() || !genre.trim()}
         className="w-full"
       >
         {loading ? 'Uploading...' : 'Upload Audio Track'}
@@ -251,4 +359,4 @@ const AudioUploadForm: React.FC = () => {
   );
 };
 
-export default AudioUploadForm; 
+export default AudioUploadForm;

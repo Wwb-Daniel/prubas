@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Heart, MessageCircle, Share2, User, Volume2, VolumeX, Play, Pause, Bookmark, MoreVertical, Plus, Check, Pencil, Trash2, Download, Crown } from 'lucide-react';
+import { Heart, MessageCircle, Share2, User, Volume2, VolumeX, Play, Pause, Bookmark, MoreVertical, Plus, Check, Pencil, Trash2, Download, Crown, Music, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
 import { useUserStore } from '../../store/userStore';
 import { Link, useNavigate } from 'react-router-dom';
@@ -8,18 +8,24 @@ import { supabase } from '../../lib/supabase';
 import type { Video } from '../../lib/supabase';
 import CommentSection from './CommentSection';
 import EditVideoModal from './EditVideoModal';
+import AudioDiscPlayer from '../audio/AudioDiscPlayer';
+import AudioMarquee from '../audio/AudioMarquee';
+import Button from '../ui/Button';
 
 interface VideoPlayerProps {
   video: Video;
   isActive: boolean;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
+const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [videoVolume, setVideoVolume] = useState(video.video_volume ?? 1);
+  const [audioVolume, setAudioVolume] = useState(video.audio_volume ?? 0.5);
   const [showComments, setShowComments] = useState(false);
   const [showPlayButton, setShowPlayButton] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
@@ -29,6 +35,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [likesCount, setLikesCount] = useState(video.likes_count || 0);
   const [commentsCount, setCommentsCount] = useState(video.comments_count || 0);
+  const [audioTrack, setAudioTrack] = useState(video.audio_track || null);
+  const [showUseAudioModal, setShowUseAudioModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const { likeVideo, saveVideo, deleteVideo, updateVideo, marcarVideoVisto } = useVideoStore();
   const { followUser, unfollowUser, isFollowing: checkIsFollowing } = useUserStore();
   const navigate = useNavigate();
@@ -38,7 +48,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     setHasMarkedAsViewed(false);
     setLikesCount(video.likes_count || 0);
     setCommentsCount(video.comments_count || 0);
-  }, [video.id, video.likes_count, video.comments_count]);
+    setAudioTrack(video.audio_track || null);
+  }, [video.id, video.likes_count, video.comments_count, video.audio_track]);
+
+  // Fetch audio track if video has audio_track_id but no audio_track data
+  useEffect(() => {
+    const fetchAudioTrack = async () => {
+      if (video.audio_track_id && !video.audio_track) {
+        try {
+          const { data, error } = await supabase
+            .from('audio_tracks')
+            .select(`
+              *,
+              user_profile:profiles!user_id(id, username, avatar_url)
+            `)
+            .eq('id', video.audio_track_id)
+            .single();
+
+          if (error) throw error;
+          setAudioTrack(data);
+        } catch (error) {
+          console.error('Error fetching audio track:', error);
+        }
+      }
+    };
+
+    fetchAudioTrack();
+  }, [video.audio_track_id, video.audio_track]);
 
   // Check if current user is the video owner
   useEffect(() => {
@@ -97,40 +133,80 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     checkSaveStatus();
   }, [video.id]);
 
+  // Manejar la reproducción y detención del video
   useEffect(() => {
+    let playTimeout: NodeJS.Timeout;
+    let isPlayingPromise: Promise<void> | null = null;
+
     if (videoRef.current) {
       if (isActive) {
         const playVideo = async () => {
           try {
-            if (!isPlaying) {
-              await videoRef.current?.play();
-              setIsPlaying(true);
-              setShowPlayButton(false);
-              
-              // Marcar video como visto después de 3 segundos de reproducción
-              if (!hasMarkedAsViewed) {
-                setTimeout(async () => {
-                  if (isPlaying && !hasMarkedAsViewed) {
-                    await marcarVideoVisto(video.id);
-                    setHasMarkedAsViewed(true);
-                  }
-                }, 3000); // 3 segundos
-              }
+            // Cancelar cualquier reproducción pendiente
+            if (isPlayingPromise) {
+              videoRef.current?.pause();
+              isPlayingPromise = null;
             }
-          } catch (error) {
+
+            // Esperar un momento antes de intentar reproducir
+            await new Promise(resolve => {
+              playTimeout = setTimeout(resolve, 100);
+            });
+
+            // Intentar reproducir
+            const playPromise = videoRef.current?.play();
+            if (playPromise) {
+              isPlayingPromise = playPromise;
+              await isPlayingPromise;
+            }
+            
+            setIsPlaying(true);
+            setShowPlayButton(false);
+            
+            // Marcar video como visto
+            if (!hasMarkedAsViewed) {
+              await marcarVideoVisto(video.id);
+              setHasMarkedAsViewed(true);
+            }
+          } catch (error: any) {
+            console.error('Error playing video:', error);
             setIsPlaying(false);
             setShowPlayButton(true);
+          } finally {
+            isPlayingPromise = null;
           }
         };
         playVideo();
       } else {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
+        // Solo pausar el video cuando no está activo
+        if (isPlayingPromise) {
+          videoRef.current?.pause();
+          isPlayingPromise = null;
+        }
         setIsPlaying(false);
         setShowPlayButton(true);
       }
     }
-  }, [isActive, hasMarkedAsViewed, isPlaying, marcarVideoVisto, video.id]);
+
+    // Cleanup function
+    return () => {
+      clearTimeout(playTimeout);
+      if (videoRef.current) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    };
+  }, [isActive, video.id, marcarVideoVisto, setHasMarkedAsViewed, hasMarkedAsViewed, videoRef, setIsPlaying, setShowPlayButton]);
+
+  // Configurar los niveles de volumen iniciales
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = videoVolume;
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = audioVolume;
+    }
+  }, [video.video_volume, video.audio_volume]);
 
   const togglePlay = async () => {
     if (videoRef.current) {
@@ -140,21 +216,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
           setIsPlaying(false);
           setShowPlayButton(true);
         } else {
+          // Esperar un momento antes de intentar reproducir
+          await new Promise(resolve => setTimeout(resolve, 100));
           await videoRef.current.play();
           setIsPlaying(true);
           setShowPlayButton(false);
-          
-          // Marcar como visto si no se ha marcado aún
-          if (!hasMarkedAsViewed) {
-            setTimeout(async () => {
-              if (isPlaying && !hasMarkedAsViewed) {
-                await marcarVideoVisto(video.id);
-                setHasMarkedAsViewed(true);
-              }
-            }, 3000);
-          }
         }
       } catch (error) {
+        console.error('Error toggling play:', error);
         setIsPlaying(false);
         setShowPlayButton(true);
       }
@@ -218,10 +287,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     await saveVideo(video.id);
   };
 
-  const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this video?')) {
-      await deleteVideo(video.id);
-      navigate('/');
+  const handleDelete = () => {
+    setShowDeleteModal(true);
+    setShowOptions(false);
+  };
+
+  const confirmDelete = async () => {
+    if (typeof video.id === 'string') {
+      try {
+        await deleteVideo(video.id);
+        setShowDeleteModal(false);
+        setShowSuccessMessage(true);
+        
+        // Aumentamos la duración a 3 segundos y añadimos un sonido de éxito
+        const audio = new Audio('/success.mp3');
+        audio.play().catch(() => {}); // Ignoramos errores si el navegador bloquea el audio
+        
+        setTimeout(() => {
+          setShowSuccessMessage(false);
+          navigate('/');
+        }, 3000);
+      } catch (error) {
+        console.error('Error al eliminar el video:', error);
+      }
     }
   };
 
@@ -230,7 +318,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     setShowOptions(false);
   };
 
-  const handleVideoUpdate = async (title: string, description: string) => {
+  const handleVideoUpdate = async (title: string, description: string | null) => {
     await updateVideo(video.id, title, description);
   };
 
@@ -287,7 +375,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     try {
       await navigator.share({
         title: video.title,
-        text: video.description,
+        text: video.description || '',
         url: window.location.href
       });
     } catch (error) {
@@ -301,6 +389,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
     setCommentsCount(prev => prev + 1);
   };
 
+  const handleUseAudio = () => {
+    setShowUseAudioModal(true);
+    setShowOptions(false);
+  };
+
+  const handleUseAudioConfirm = () => {
+    // Navegar a la página de upload con el audio seleccionado
+    navigate('/upload', { 
+      state: { 
+        selectedAudioTrack: audioTrack,
+        fromVideo: video.id 
+      } 
+    });
+    setShowUseAudioModal(false);
+  };
+
+  const handleAudioClick = () => {
+    if (audioTrack) {
+      navigate(`/audio/${audioTrack.id}`);
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-black">
       <video
@@ -312,6 +422,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
         muted={isMuted}
         onClick={togglePlay}
       />
+      
+      {/* Audio element oculto */}
+      {video.audio_track && video.audio_track.audio_url && (
+        <audio
+          ref={audioRef}
+          src={video.audio_track.audio_url}
+          preload="metadata"
+        />
+      )}
       
       <motion.button
         whileTap={{ scale: 1.1 }}
@@ -402,6 +521,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
             </div>
           </motion.button>
 
+          {/* Audio Disc - TikTok style */}
+          {audioTrack && (
+            <motion.div
+              whileTap={{ scale: 0.95 }}
+              className="flex flex-col items-center video-control mt-4"
+            >
+              <AudioDiscPlayer
+                audioTrack={audioTrack}
+                isVideoPlaying={isPlaying}
+                onDiscClick={handleAudioClick}
+                size="md"
+              />
+            </motion.div>
+          )}
+
           <AnimatePresence>
             {showOptions && (
               <motion.div
@@ -434,6 +568,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
                       Delete
                     </button>
                   </>
+                )}
+                {audioTrack && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUseAudio();
+                    }}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-700 flex items-center"
+                  >
+                    <Music size={18} className="mr-2" />
+                    Use this audio
+                  </button>
                 )}
                 <button
                   onClick={(e) => {
@@ -517,7 +663,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
           <h3 className="text-sm font-medium mb-1">{video.title}</h3>
           
           {video.description && (
-            <p className="text-xs text-gray-300 line-clamp-2">{video.description}</p>
+            <p className="text-xs text-gray-300 line-clamp-2 mb-2">{video.description}</p>
+          )}
+
+          {/* Audio Marquee - TikTok style */}
+          {audioTrack && (
+            <div className="mt-2">
+              <AudioMarquee 
+                audioTrack={audioTrack}
+                onAudioClick={handleAudioClick}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -548,6 +704,132 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, isActive }) => {
             onClose={() => setShowEditModal(false)}
             onUpdate={handleVideoUpdate}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Modal para confirmar uso del audio */}
+      <AnimatePresence>
+        {showUseAudioModal && audioTrack && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowUseAudioModal(false);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-gray-900 rounded-lg w-full max-w-md p-6"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-pink-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Music size={32} className="text-white" />
+                </div>
+                
+                <h3 className="text-xl font-bold mb-2">Use this audio</h3>
+                <p className="text-gray-400 mb-4">
+                  Create a video with "{audioTrack.title}" by @{audioTrack.user_profile?.username}
+                </p>
+                
+                <div className="bg-gray-800 rounded-lg p-3 mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 flex items-center justify-center">
+                      <Music size={20} className="text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium">{audioTrack.title}</p>
+                      <p className="text-sm text-gray-400">{audioTrack.genre}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowUseAudioModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUseAudioConfirm}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    Use Audio
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSuccessMessage && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-green-500 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 min-w-[300px]"
+          >
+            <div className="bg-white/20 p-2 rounded-full">
+              <CheckCircle size={24} className="text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-lg">¡Video eliminado!</span>
+              <span className="text-sm text-white/80">El video ha sido eliminado exitosamente</span>
+            </div>
+          </motion.div>
+        )}
+
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowDeleteModal(false);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-gray-900 rounded-lg w-full max-w-md p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                  <AlertTriangle className="text-red-500" size={24} />
+                </div>
+                <h2 className="text-xl font-semibold mb-2">¿Eliminar video?</h2>
+                <p className="text-gray-400">
+                  Esta acción no se puede deshacer. El video será eliminado permanentemente.
+                </p>
+              </div>
+
+              <div className="flex gap-4">
+                <Button
+                  variant="outline"
+                  className="flex-1 py-2.5"
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1 py-2.5 bg-red-500 hover:bg-red-600"
+                  onClick={confirmDelete}
+                >
+                  Eliminar
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

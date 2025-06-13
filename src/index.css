@@ -23,6 +23,16 @@
   animation: pulse-heart 0.3s ease-in-out;
 }
 
+/* Marquee animation for audio text */
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  animation: marquee 15s linear infinite;
+}
+
 /* Smooth transitions for video controls */
 .video-control {
   transition: all 0.2s ease-in-out;
@@ -38,4 +48,14 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Audio disc rotation */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
 }

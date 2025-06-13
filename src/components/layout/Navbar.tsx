@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, PlusSquare, User, LogOut, Menu, X, Compass, Users, Settings, MessageCircle } from 'lucide-react';
+import { Home, Search, PlusSquare, User, LogOut, Menu, X, Compass, Users, Settings, MessageCircle, Music } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useVideoStore } from '../../store/videoStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -97,6 +97,13 @@ const Navbar: React.FC = () => {
                   icon={<PlusSquare size={20} />}
                   label="Upload"
                   isActive={location.pathname === '/upload'}
+                  onClick={() => setIsMenuOpen(false)}
+                />
+                <NavItem
+                  to="/audio"
+                  icon={<Music size={20} />}
+                  label="Audio Library"
+                  isActive={location.pathname === '/audio'}
                   onClick={() => setIsMenuOpen(false)}
                 />
                 <NavItem

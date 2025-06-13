@@ -18,6 +18,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Storage bucket names
+export const VIDEO_BUCKET = 'videos';
+export const AUDIO_BUCKET = 'audio_tracks';
+
 export type UserProfile = {
   id: string;
   username: string;
@@ -26,6 +30,7 @@ export type UserProfile = {
   created_at: string;
   followers_count: number;
   following_count: number;
+  is_vip?: boolean;
 }
 
 export type UserSettings = {
@@ -37,27 +42,51 @@ export type UserSettings = {
   updated_at: string;
 }
 
+export type AudioTrack = {
+  id: string;
+  user_id: string;
+  title: string;
+  audio_url: string;
+  genre?: string;
+  tags?: string[];
+  created_at: string;
+  user_profile?: UserProfile;
+  usage_count?: number;
+  cover_image_url?: string;
+  thumbnail_url?: string;
+}
+
 export type Video = {
   id: string;
   title: string;
-  description?: string;
+  description: string | null;
   video_url: string;
-  thumbnail_url?: string;
   user_id: string;
   created_at: string;
+  updated_at: string;
   likes_count: number;
   comments_count: number;
   views_count: number;
-  is_edited: boolean;
-  user_profile?: UserProfile;
-}
+  audio_track_id: string | null;
+  video_volume: number;
+  audio_volume: number;
+  user_profile?: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+    is_vip: boolean;
+  };
+  audio_track?: AudioTrack;
+};
 
 export type Comment = {
   id: string;
   content: string;
   user_id: string;
-  video_id: string;
+  content_id: string;
+  content_type: 'video' | 'image_post';
   created_at: string;
+  reactions?: Record<string, number>;
   user_profile?: UserProfile;
 }
 
@@ -128,5 +157,58 @@ export async function recordViewAndUpdate(videoId: string) {
     }
   } catch (error) {
     console.error('Error recording view:', error);
+  }
+}
+
+// Function to get audio track usage count
+export async function getAudioTrackUsageCount(audioTrackId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('videos')
+      .select('*', { count: 'exact', head: true })
+      .eq('audio_track_id', audioTrackId);
+
+    if (error) throw error;
+    return count || 0;
+  } catch (error) {
+    console.error('Error getting audio track usage count:', error);
+    return 0;
+  }
+}
+
+// Function to get videos using specific audio track
+export async function getVideosByAudioTrack(audioTrackId: string, limit: number = 20, offset: number = 0) {
+  try {
+    const { data, error } = await supabase
+      .from('videos')
+      .select(`
+        *,
+        user_profile:profiles!user_id(
+          id, 
+          username, 
+          avatar_url, 
+          is_vip
+        ),
+        audio_track:audio_tracks!audio_track_id(
+          id,
+          title,
+          audio_url,
+          genre,
+          tags,
+          user_id,
+          created_at,
+          updated_at,
+          user_profile:profiles!user_id(id, username, avatar_url)
+        )
+      `)
+      .eq('audio_track_id', audioTrackId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error getting videos by audio track:', error);
+    return [];
   }
 }

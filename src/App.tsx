@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 
@@ -16,6 +16,8 @@ import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import UploadPage from './pages/UploadPage';
 import SearchPage from './pages/SearchPage';
+import AudioTracksPage from './pages/AudioTracksPage';
+import AudioDetailsPage from './pages/AudioDetailsPage';
 
 function App() {
   const { initialize, initialized } = useAuthStore();
@@ -27,7 +29,7 @@ function App() {
   if (!initialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
-        <img src="/logo.svg" alt="VideoNew" className="w-16 h-16 animate-pulse" />
+        <img src="/logo (2).png" alt="OmniPlay" className="w-16 h-16 animate-pulse" />
       </div>
     );
   }
@@ -52,6 +54,8 @@ function App() {
           <Route path="profile/:id" element={<ProfilePage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="audio" element={<AudioTracksPage />} />
+          <Route path="audio/:id" element={<AudioDetailsPage />} />
         </Route>
         
         {/* Catch-all route */}

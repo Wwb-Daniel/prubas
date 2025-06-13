@@ -2,40 +2,29 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig({
   plugins: [
     react(),
-    mode === 'analyze' && visualizer({
+    visualizer({
       open: true,
-      filename: 'dist/stats.html',
       gzipSize: true,
       brotliSize: true,
-    }),
+    })
   ],
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'router': ['react-router-dom'],
-          'ui': ['framer-motion', 'lucide-react'],
-          'supabase': ['@supabase/supabase-js'],
-          'state': ['zustand'],
-        },
-      },
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['framer-motion', 'lucide-react'],
+          'utils-vendor': ['date-fns', 'clsx', 'tailwind-merge', 'zustand']
+        }
+      }
     },
     minify: 'terser',
-    cssMinify: true,
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
-    reportCompressedSize: true,
-    chunkSizeWarningLimit: 1000,
+    sourcemap: true
   },
-}));
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'framer-motion', 'lucide-react']
+  }
+});

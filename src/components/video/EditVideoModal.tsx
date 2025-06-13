@@ -3,14 +3,12 @@ import { X } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { motion } from 'framer-motion';
+import type { Video } from '../../lib/supabase';
 
 interface EditVideoModalProps {
-  video: {
-    title: string;
-    description?: string;
-  };
+  video: Video;
   onClose: () => void;
-  onUpdate: (title: string, description: string) => void;
+  onUpdate: (title: string, description: string | null) => void;
 }
 
 const EditVideoModal: React.FC<EditVideoModalProps> = ({
@@ -25,7 +23,7 @@ const EditVideoModal: React.FC<EditVideoModalProps> = ({
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdate(formData.title, formData.description);
+    onUpdate(formData.title, formData.description || null);
     onClose();
   };
 

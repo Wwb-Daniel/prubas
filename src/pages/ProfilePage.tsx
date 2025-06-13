@@ -3,15 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { UserProfile, Video } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import { Grid, Heart, Bookmark, ArrowLeft, Eye } from 'lucide-react';
+import { Grid, Heart, Bookmark, ArrowLeft, Eye, Music } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import EditProfileModal from '../components/profile/EditProfileModal';
 import VideoViewer from '../components/video/VideoViewer';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import { AnimatePresence } from 'framer-motion';
+import { UserAudioTracks } from '../components/profile/UserAudioTracks';
 
-type TabType = 'videos' | 'likes' | 'saved';
+type TabType = 'videos' | 'likes' | 'saved' | 'audios';
 
 const ProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -256,6 +257,21 @@ const ProfilePage: React.FC = () => {
     );
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'videos':
+        return renderVideoGrid(videos);
+      case 'likes':
+        return renderVideoGrid(likedVideos);
+      case 'saved':
+        return renderVideoGrid(savedVideos);
+      case 'audios':
+        return <UserAudioTracks userId={profile.id} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black pb-16 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -287,6 +303,16 @@ const ProfilePage: React.FC = () => {
               <>
                 <button
                   className={`flex items-center justify-center flex-1 py-2 space-x-2 ${
+                    activeTab === 'audios' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'
+                  }`}
+                  onClick={() => setActiveTab('audios')}
+                >
+                  <Music size={20} />
+                  <span className="text-sm font-medium">Mis Audios</span>
+                </button>
+
+                <button
+                  className={`flex items-center justify-center flex-1 py-2 space-x-2 ${
                     activeTab === 'likes' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'
                   }`}
                   onClick={() => setActiveTab('likes')}
@@ -309,7 +335,7 @@ const ProfilePage: React.FC = () => {
           </div>
           
           <div className="py-4">
-            {renderVideoGrid(getCurrentVideos())}
+            {renderContent()}
           </div>
         </div>
       </div>
